@@ -1,69 +1,125 @@
 #include "lcd.h"
 #include <string.h>
-#include <systick_delay.h>
+#include "systick_delay.h"
 #include "tm4c123gh6pm.h"
 
-// --- Initialization and Reset --- //
-void lcd_general_init(void){
+// --- Global Static Variables --- //
+static unsigned long* ports[6] = {(unsigned long*) 0x40004000, 
+	(unsigned long*) 0x40005000, 
+	(unsigned long*) 0x40006000, 
+	(unsigned long*) 0x40007000, 
+	(unsigned long*) 0x40024000, 
+	(unsigned long*) 0x40025000
+};
 
-	lcd_init();
-	lcd_display_control(ON,NO_CURSOR,NO_BLINKING);
-	lcd_display_entry(INCREMENT,NO_SCROLL);
-	lcd_display_function(BIT8,LINE2,DOT40);
+// --- Initialization and Reset --- //
+void LCD_16x2_Init_Simple(void){
+	
+	unsigned int lo_port = PORTD;
+	unsigned int hi_port = PORTA;
+	unsigned int ct_port = PORTF;
+
+	LCD_16x2_Init_3_Ports(lo_port, hi_port, ct_port, 0xFF, 0x3C, 0x07);
+	LCD_16x2_Control_Config(ON,NO_CURSOR,NO_BLINKING);
+	LCD_16x2_Entry_Config(INCREMENT,NO_SCROLL);
+	LCD_16x2_Function_Config(BIT8,LINE2,DOT40);
 	
 }
 
-void lcd_init(void){
+void LCD_16x2_Init_2_Ports(unsigned int DATA, unsigned int CTRL, unsigned long DATA_bits, unsigned long CTRL_bits){
 	
-	// declare local variables
+	// --- retrieve data and control port pointers --- //
+	unsigned long* data = ports[DATA];
+	unsigned long* ctrl = ports[CTRL];
+
+	// --- initialize clock for ports DATA and CTRL ports --- // 
+	LCD_16x2_Init_Port_Clock(DATA,CTRL,NO_PORT);
+	
+	// --- configure data ports --- // 
+	*(data+0x520/4) = 0x4C4F434B; // Unlock
+	*(data+0x524/4) |= DATA_bits; // Commit
+	*(data+0x400/4) |= DATA_bits; // Direction 
+	*(data+0x51C/4) |= DATA_bits; // Digital Enable
+	*(data+0x528/4) &= ~(DATA_bits); // Analog Enable
+	*(data+0x420/4) &= ~(DATA_bits); // Alternate Function Select
+	
+	// --- configure control ports --- // 
+	*(ctrl+0x520/4) = 0x4C4F434B; // Unlock
+	*(ctrl+0x524/4) |= CTRL_bits; // Commit
+	*(ctrl+0x400/4) |= CTRL_bits; // Direction 
+	*(ctrl+0x51C/4) |= CTRL_bits; // Digital Enable
+	*(ctrl+0x528/4) &= ~(CTRL_bits); // Analog Enable
+	*(ctrl+0x420/4) &= ~(CTRL_bits); // Alternate Function Select
+	
+
+}
+
+void LCD_16x2_Init_3_Ports(unsigned int LO, unsigned int HI, unsigned int CTRL, unsigned long LO_bits, unsigned long HI_bits, unsigned long CTRL_bits){
+	
 	volatile unsigned long delay;
 	
-	unsigned long activeA = 0x3C;
-	unsigned long activeF = 0x07;
-	unsigned long activeD = 0x0F;
-	
-	// --- initialize clock for ports A, D, F --- // 
-	SYSCTL_RCGC2_R = 0x29;
-	delay = SYSCTL_RCGCGPIO_R;
-	
-	// --- configure port A --- // 
-	GPIO_PORTA_DIR_R = activeA;
-	GPIO_PORTA_DEN_R = activeA;	
-	GPIO_PORTA_AMSEL_R =0x0;
-	GPIO_PORTA_AFSEL_R &= 0x0;
+		// --- retrieve data and control port pointers --- //
+	volatile unsigned long* lo = ports[LO];
+	volatile unsigned long* hi = ports[HI];
+	volatile unsigned long* ctrl = ports[CTRL];
 
-	// --- configure port D --- // 
-	GPIO_PORTD_DIR_R = activeD;
-	GPIO_PORTD_DEN_R = activeD;	
-	GPIO_PORTD_AMSEL_R = 0x0;
-	GPIO_PORTD_AFSEL_R &= 0x0;
+	// --- initialize clock for ports DATA and CTRL ports --- // 
+	LCD_16x2_Init_Port_Clock(LO, HI, CTRL);
+	delay = SYSCTL_RCGCGPIO_R;
+		
+	// --- configure data ports --- // 
+	*(lo+(0x520/4)) = 0x4C4F434B; // Unlock
+	*(lo+0x524/4) |= LO_bits; // Commit
+	*(lo+0x400/4) |= LO_bits; // Direction 
+	*(lo+0x51C/4) |= LO_bits; // Digital Enable
+	*(lo+0x528/4) &= ~(LO_bits); // Analog Enable
+	*(lo+0x420/4) &= ~(LO_bits); // Alternate Function Select
 	
-	// --- configure port F --- // 
-	GPIO_PORTF_LOCK_R  = 0x4C4F434B;
-	GPIO_PORTF_CR_R = 0x1;
-	GPIO_PORTF_DIR_R = activeF;
-	GPIO_PORTF_DEN_R = activeF;	
-	GPIO_PORTF_AMSEL_R = 0x0;
-	GPIO_PORTF_AFSEL_R &= 0x0;
+	// --- configure control ports --- // 
+	*(hi+(0x520/4)) = 0x4C4F434B; // Unlock
+	*(hi+0x524/4) |= HI_bits; // Commit
+	*(hi+0x400/4) |= HI_bits; // Direction 
+	*(hi+0x51C/4) |= HI_bits; // Digital Enable
+	*(hi+0x528/4) &= ~(HI_bits); // Analog Enable
+	*(hi+0x420/4) &= ~(HI_bits); // Alternate Function Select
+	
+		// --- configure control ports --- // 
+	*(ctrl+0x520/4) = 0x4C4F434B; // Unlock
+	*(ctrl+0x524/4) |= CTRL_bits; // Commit
+	*(ctrl+0x400/4) |= CTRL_bits; // Direction 
+	*(ctrl+0x51C/4) |= CTRL_bits; // Digital Enable
+	*(ctrl+0x528/4) &= ~(CTRL_bits); // Analog Enable
+	*(ctrl+0x420/4) &= ~(CTRL_bits); // Alternate Function Select
+	
 }
 
-void lcd_display_clear(void){
+void LCD_16x2_Init_Port_Clock(unsigned int PORT1, unsigned int PORT2, unsigned int PORT3){
+	
+	volatile unsigned long delay;
+	
+	unsigned int ports = (1 << PORT1) + (1 << PORT2) + (1 << PORT3);
+	SYSCTL_RCGCGPIO_R = ports;
+	delay = SYSCTL_RCGCGPIO_R;
+
+}
+
+void LCD_16x2_Clear(void){
 	
 	unsigned char data = 0x01;
 	unsigned char control = 0x4;
 	
-	lcd_send_command(data, control);
+	LCD_16x2_Transmit_Command(data, control);
 }
 
-void lcd_display_return(void){
+void LCD_16x2_Return(void){
 
 	unsigned char data = 0x2;
 	unsigned char control = 0x0;
 	
-	lcd_send_command(data,control);
+	LCD_16x2_Transmit_Command(data,control);
 }
 
-void lcd_display_control(unsigned char on, unsigned char cursor, unsigned char blinking){
+void LCD_16x2_Control_Config(unsigned char on, unsigned char cursor, unsigned char blinking){
 	
 	unsigned char data = 0x08;
 	data |= (on << 2);
@@ -73,10 +129,10 @@ void lcd_display_control(unsigned char on, unsigned char cursor, unsigned char b
 	
 	unsigned char control = 0x0;
 	
-	lcd_send_command(data, control);
+	LCD_16x2_Transmit_Command(data, control);
 }
 
-void lcd_display_function(unsigned char length,  unsigned char lines, unsigned char font){
+void LCD_16x2_Function_Config(unsigned char length,  unsigned char lines, unsigned char font){
 	
 	unsigned char data = 0x20;
 	data |= (length << 4);
@@ -85,139 +141,139 @@ void lcd_display_function(unsigned char length,  unsigned char lines, unsigned c
 	
 	unsigned char control = 0x0;
 	
-	lcd_send_command(data, control);
+	LCD_16x2_Transmit_Command(data, control);
 	
 }
 
-void lcd_display_entry(unsigned char increment, unsigned char scroll){
+void LCD_16x2_Entry_Config(unsigned char increment, unsigned char scroll){
 	unsigned char data = 0x4;
 	data |= (increment << 1);
 	data |= (scroll << 0);
 	unsigned char control = 0x0;
 	
-	lcd_send_command(data,control);
+	LCD_16x2_Transmit_Command(data,control);
 }
 
 // --- RAM and Cursor Manipulation --- //
-void lcd_cursor_shift(unsigned char direction){
+void LCD_16x2_Cursor_Shift(unsigned char direction){
 
 	unsigned char control = 0x0;
 	unsigned char data = 0x10;
 	data |= (direction << 2);
 	
-	lcd_send_command(data,control);
+	LCD_16x2_Transmit_Command(data,control);
 	
 }
 
-void lcd_set_ddram(unsigned char addr){
+void LCD_16x2_Set_DDRAM(unsigned char addr){
 	
 	unsigned char control = 0x0;
 	unsigned char data = 0x80;
 	data |= addr;
 	
-	lcd_send_command(data,control);
+	LCD_16x2_Transmit_Command(data,control);
 
 }
 
-void lcd_display_shift(unsigned char direction){
+void LCD_16x2_Shift_Display(unsigned char direction){
 	unsigned char control = 0x0;
 	unsigned char data = 0x18;
 	data |= (direction << 2);
 	
-	lcd_send_command(data,control);
+	LCD_16x2_Transmit_Command(data,control);
 	
 }
 
 // --- Data/Command Writing (Instruction) --- //
-void lcd_write_char(unsigned char data){
+void LCD_16x2_Write_Character(unsigned char data){
 	unsigned char control = 0x1;
-	lcd_send_command(data,control);
+	LCD_16x2_Transmit_Command(data,control);
 }
 
-void lcd_write_row1(char string[]){
+void LCD_16x2_Write_Row_1(char string[]){
 
 	// Set DDRAM to 0x00;
-	lcd_set_ddram(0x00);
+	LCD_16x2_Set_DDRAM(0x00);
 	
 	// Write string
 	for(unsigned int i = 0; i < strlen(string); i++){
-		lcd_write_char(string[i]);
+		LCD_16x2_Write_Character(string[i]);
 	}
 	
 }
 
-void lcd_write_row2(char string[]){
+void LCD_16x2_Write_Row_2(char string[]){
 
 	// Set DDRAM to 0x40;
-	lcd_set_ddram(0x40);
+	LCD_16x2_Set_DDRAM(0x40);
 	
 	// Write string
 	for(unsigned int i = 0; i < strlen(string); i++){
-		lcd_write_char(string[i]);
+		LCD_16x2_Write_Character(string[i]);
 	}
 	
 }
 
 
 // --- Data/Command Writing (Physical) --- //
-void lcd_send_command(unsigned char data, unsigned char ctrl){
+void LCD_16x2_Transmit_Command(unsigned char data, unsigned char ctrl){
 	
 	unsigned char hi = (data & 0xF0) >> 4;
 	unsigned char lo = (data & 0x0F);
 	
-	lcd_enable_off();
-  lcd_send_command_hi(hi);
-	lcd_send_command_lo(lo);
-	lcd_send_command_ct(ctrl);
-  lcd_enable_on();
-	delayNms(1);
-	lcd_enable_off();
+	LCD_16x2_Enable_OFF();
+  LCD_16x2_Transmit_Command_HI(hi);
+	LCD_16x2_Transmit_Command_LO(lo);
+	LCD_16x2_Transmit_Command_CTRL(ctrl);
+  LCD_16x2_Enable_ON();
+	delayNms(10);
+	LCD_16x2_Enable_OFF();
 }
 
-void lcd_send_command_hi(unsigned char data){
+void LCD_16x2_Transmit_Command_HI(unsigned char data){
 	data = data << 2;
 	GPIO_PORTA_DATA_R = 0x0;
 	GPIO_PORTA_DATA_R |= data;
 }
 
 
-void lcd_send_command_lo(unsigned char data){
+void LCD_16x2_Transmit_Command_LO(unsigned char data){
 	GPIO_PORTD_DATA_R = 0;
 	GPIO_PORTD_DATA_R |= data;
 }
 
 
-void lcd_send_command_ct(unsigned char data){
+void LCD_16x2_Transmit_Command_CTRL(unsigned char data){
 	GPIO_PORTF_DATA_R = 0;
 	GPIO_PORTF_DATA_R |= data;
 }
 
-void lcd_enable_on(){
+void LCD_16x2_Enable_ON(){
 	GPIO_PORTF_DATA_R |= 0x4;
 }
 
-void lcd_enable_off(){
+void LCD_16x2_Enable_OFF(){
 	GPIO_PORTF_DATA_R &= ~( (unsigned long) 0x4);
 }
 
 
 // --- Testing & Diagnostic Functions --- //
-void abcd(void){
-	lcd_write_char('a');
-	lcd_write_char('b');
-	lcd_write_char('c');
-	lcd_write_char('d');	
+void LCD_16x2_Test_ABCD(void){
+	LCD_16x2_Write_Character('a');
+	LCD_16x2_Write_Character('b');
+	LCD_16x2_Write_Character('c');
+	LCD_16x2_Write_Character('d');	
 }
 
-void hello_world(void){
+void LCD_16x2_Test_HelloWorld(void){
 	
-	lcd_write_row1("Hello World");
+	LCD_16x2_Write_Row_1("Hello World");
 	
 }
 
-void morbing(void){
+void LCD_16x2_Test_Morbius(void){
 	
-	lcd_write_row1("It's Morbing");
-	lcd_write_row2("Time");
+	LCD_16x2_Write_Row_1("It's Morbing");
+	LCD_16x2_Write_Row_2("Time");
 	
 }
