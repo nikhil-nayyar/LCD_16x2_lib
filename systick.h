@@ -1,11 +1,11 @@
 #ifndef SYSTICK
 #define SYSTICK
 
-/*
+/*	
  *  Initialize SysTick with given period
  */
 
-void SysTick_Init(unsigned int period);
+void SysTick_Init(unsigned int reload_count, unsigned long clock_frequency);
 
 
 /*
