@@ -1,6 +1,6 @@
 #include "lcd.h"
 #include <string.h>
-#include "systick_delay.h"
+#include "systick.h"
 #include "tm4c123gh6pm.h"
 
 // --- Global Static Variables --- //
@@ -226,7 +226,7 @@ void LCD_16x2_Transmit_Command(unsigned char data, unsigned char ctrl){
 	LCD_16x2_Transmit_Command_LO(lo);
 	LCD_16x2_Transmit_Command_CTRL(ctrl);
   LCD_16x2_Enable_ON();
-	delayNms(10);
+	Delay_Nms(10);
 	LCD_16x2_Enable_OFF();
 }
 
@@ -255,7 +255,6 @@ void LCD_16x2_Enable_ON(){
 void LCD_16x2_Enable_OFF(){
 	GPIO_PORTF_DATA_R &= ~( (unsigned long) 0x4);
 }
-
 
 // --- Testing & Diagnostic Functions --- //
 void LCD_16x2_Test_ABCD(void){

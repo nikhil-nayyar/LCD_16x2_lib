@@ -2,15 +2,17 @@
 #define SYSTICK
 
 /*
- *  Write to relevant Systick Registers
+ *  Initialize SysTick with given period
  */
 
-void SysTick_Init(void);
+void SysTick_Init(unsigned int period);
+
 
 /*
- * Overwrite base Systick Interrupt Handler
- */
-
-void SysTick_Handler(void);
+ * delay for N ms
+ */ 
+void Delay_Nms(unsigned int ms);
 
 #endif
+
+
